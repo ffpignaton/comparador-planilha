@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Comparador de Planilhas</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      padding: 40px;
+      background: #f4f4f4;
+    }
+
+    .box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: inline-block;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      background: #28a745;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    button:hover {
+      background: #218838;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="box">
+    <h2>📊 Comparar Abas A e B</h2>
+    <input type="file" id="fileInput" />
+    <br>
+    <button onclick="processar()">Processar Planilha</button>
+  </div>
+
+  <script>
+    function processar() {
+      const file = document.getElementById('fileInput').files[0];
+
+      if (!file) {
+        alert("Selecione um arquivo!");
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        const abaA = workbook.Sheets["A"];
+        const abaB = workbook.Sheets["B"];
+
+        if (!abaA || !abaB) {
+          alert("A planilha precisa ter abas chamadas 'A' e 'B'");
+          return;
+        }
+
+        const jsonA = XLSX.utils.sheet_to_json(abaA, { header: 1 });
+        const jsonB = XLSX.utils.sheet_to_json(abaB, { header: 1 });
+
+        // Índices das colunas
+        const COL_D = 3;
+        const colsCopiar = [11,12,13,14,15,16,17]; // L M N O P Q R
+
+        // Criar mapa da aba A baseado na coluna D
+        const mapaA = {};
+
+        for (let i = 1; i < jsonA.length; i++) {
+          const chave = jsonA[i][COL_D];
+          if (chave) {
+            mapaA[chave] = jsonA[i];
+          }
+        }
+
+        // Comparar com aba B
+        for (let i = 1; i < jsonB.length; i++) {
+          const chaveB = jsonB[i][COL_D];
+
+          if (mapaA[chaveB]) {
+            const linhaA = mapaA[chaveB];
+
+            colsCopiar.forEach(col => {
+              jsonB[i][col] = linhaA[col];
+            });
+          }
+        }
+
+        // Atualizar aba B
+        const novaAbaB = XLSX.utils.aoa_to_sheet(jsonB);
+        workbook.Sheets["B"] = novaAbaB;
+
+        // Download
+        XLSX.writeFile(workbook, "planilha_atualizada.xlsx");
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+
+</body>
+</html>
