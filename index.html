@@ -2,197 +2,107 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Comparador de Planilhas PRO</title>
+  <title>Comparador de Planilhas</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
   <style>
     body {
       font-family: Arial;
-      background: #f4f6f9;
-      padding: 20px;
       text-align: center;
+      padding: 40px;
+      background: #f4f4f4;
     }
 
-    .container {
+    .box {
       background: white;
-      padding: 20px;
+      padding: 30px;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: inline-block;
     }
 
     button {
       padding: 10px 20px;
-      margin: 10px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    .btn-processar {
-      background: #007bff;
-      color: white;
-    }
-
-    .btn-download {
+      margin-top: 15px;
       background: #28a745;
       color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
     }
 
-    table {
-      border-collapse: collapse;
-      margin-top: 20px;
-      width: 100%;
-      font-size: 12px;
-    }
-
-    th, td {
-      border: 1px solid #ddd;
-      padding: 5px;
-    }
-
-    th {
-      background: #007bff;
-      color: white;
-    }
-
-    .alterado {
-      background: #ffeeba !important;
-    }
-
-    .contador {
-      font-size: 18px;
-      margin-top: 10px;
-      color: #333;
+    button:hover {
+      background: #218838;
     }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>📊 Comparador de Planilhas PRO</h2>
+  <div class="box">
+    <h2>📊 Comparar Abas A e B</h2>
+    <input type="file" id="fileInput" />
+    <br>
+    <button onclick="processar()">Processar Planilha</button>
+  </div>
 
-  <input type="file" id="fileInput" />
-  <br>
+  <script>
+    function processar() {
+      const file = document.getElementById('fileInput').files[0];
 
-  <button class="btn-processar" onclick="processar()">Processar</button>
-  <button class="btn-download" onclick="baixar()">Baixar Planilha</button>
+      if (!file) {
+        alert("Selecione um arquivo!");
+        return;
+      }
 
-  <div class="contador" id="contador"></div>
+      const reader = new FileReader();
 
-  <div id="preview"></div>
-</div>
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
 
-<script>
-let workbookGlobal;
+        const abaA = workbook.Sheets["A"];
+        const abaB = workbook.Sheets["B"];
 
-function processar() {
-  const file = document.getElementById('fileInput').files[0];
+        if (!abaA || !abaB) {
+          alert("A planilha precisa ter abas chamadas 'A' e 'B'");
+          return;
+        }
 
-  if (!file) {
-    alert("Selecione um arquivo!");
-    return;
-  }
+        const jsonA = XLSX.utils.sheet_to_json(abaA, { header: 1 });
+        const jsonB = XLSX.utils.sheet_to_json(abaB, { header: 1 });
 
-  const reader = new FileReader();
+        const COL_D = 3;
+        const colsCopiar = [11,12,13,14,15,16,17];
 
-  reader.onload = function(e) {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
+        const mapaA = {};
 
-    workbookGlobal = workbook;
-
-    const abaA = workbook.Sheets["A"];
-    const abaB = workbook.Sheets["B"];
-
-    if (!abaA || !abaB) {
-      alert("A planilha precisa ter abas A e B");
-      return;
-    }
-
-    const jsonA = XLSX.utils.sheet_to_json(abaA, { header: 1 });
-    const jsonB = XLSX.utils.sheet_to_json(abaB, { header: 1 });
-
-    const COL_D = 3;
-    const colsCopiar = [11,12,13,14,15,16,17];
-
-    let atualizados = 0;
-
-    const mapaA = {};
-
-    for (let i = 1; i < jsonA.length; i++) {
-      const chave = jsonA[i][COL_D];
-      if (chave) mapaA[chave] = jsonA[i];
-    }
-
-    let alteracoes = {};
-
-    for (let i = 1; i < jsonB.length; i++) {
-      const chaveB = jsonB[i][COL_D];
-
-      if (mapaA[chaveB]) {
-        const linhaA = mapaA[chaveB];
-
-        colsCopiar.forEach(col => {
-          const valorAntigo = jsonB[i][col];
-          const valorNovo = linhaA[col];
-
-          if (valorAntigo !== valorNovo) {
-            jsonB[i][col] = valorNovo;
-
-            if (!alteracoes[i]) alteracoes[i] = {};
-            alteracoes[i][col] = true;
+        for (let i = 1; i < jsonA.length; i++) {
+          const chave = jsonA[i][COL_D];
+          if (chave) {
+            mapaA[chave] = jsonA[i];
           }
-        });
+        }
 
-        atualizados++;
-      }
+        for (let i = 1; i < jsonB.length; i++) {
+          const chaveB = jsonB[i][COL_D];
+
+          if (mapaA[chaveB]) {
+            const linhaA = mapaA[chaveB];
+
+            colsCopiar.forEach(col => {
+              jsonB[i][col] = linhaA[col];
+            });
+          }
+        }
+
+        const novaAbaB = XLSX.utils.aoa_to_sheet(jsonB);
+        workbook.Sheets["B"] = novaAbaB;
+
+        XLSX.writeFile(workbook, "planilha_atualizada.xlsx");
+      };
+
+      reader.readAsArrayBuffer(file);
     }
-
-    document.getElementById("contador").innerText =
-      `🔄 ${atualizados} registros atualizados`;
-
-    const novaAbaB = XLSX.utils.aoa_to_sheet(jsonB);
-    workbook.Sheets["B"] = novaAbaB;
-
-    renderTabela(jsonB, alteracoes);
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-function renderTabela(data, alteracoes) {
-  let html = "<table>";
-
-  data.forEach((linha, i) => {
-    html += "<tr>";
-
-    linha.forEach((celula, j) => {
-      const classe = alteracoes[i] && alteracoes[i][j] ? "alterado" : "";
-
-      if (i === 0) {
-        html += `<th>${celula || ""}</th>`;
-      } else {
-        html += `<td class="${classe}">${celula || ""}</td>`;
-      }
-    });
-
-    html += "</tr>";
-  });
-
-  html += "</table>";
-
-  document.getElementById("preview").innerHTML = html;
-}
-
-function baixar() {
-  if (!workbookGlobal) {
-    alert("Processe a planilha primeiro!");
-    return;
-  }
-
-  XLSX.writeFile(workbookGlobal, "planilha_atualizada.xlsx");
-}
-</script>
+  </script>
 
 </body>
 </html>
